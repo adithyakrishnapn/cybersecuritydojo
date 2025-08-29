@@ -1,0 +1,165 @@
+// src/App.jsx
+import React, { useState, useRef, useEffect } from "react";
+import { motion } from "framer-motion";
+import PhishingHunter from "./components/PhishingHunter";
+import PasswordFortress from "./components/PasswordFortress";
+
+export default function App() {
+  const [game, setGame] = useState(null);
+  const [isMuted, setIsMuted] = useState(false);
+  const backgroundMusicRef = useRef(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  useEffect(() => {
+    // Initialize background music
+    if (typeof Audio !== "undefined") {
+      backgroundMusicRef.current = new Audio("/background-music.mp3");
+      backgroundMusicRef.current.volume = 0.4;
+      backgroundMusicRef.current.loop = true;
+      
+      // Try to play music when user interacts
+      const tryPlayMusic = () => {
+        if (!isMuted && !isPlaying) {
+          backgroundMusicRef.current.play()
+            .then(() => setIsPlaying(true))
+            .catch(err => {
+              console.log("Audio play failed:", err);
+            });
+        }
+      };
+      
+      // Try to play on initial load
+      tryPlayMusic();
+      
+      // Add event listener for user interaction
+      document.addEventListener('click', tryPlayMusic, { once: true });
+      
+      return () => {
+        document.removeEventListener('click', tryPlayMusic);
+        if (backgroundMusicRef.current) {
+          backgroundMusicRef.current.pause();
+        }
+      };
+    }
+  }, []);
+
+  useEffect(() => {
+    if (backgroundMusicRef.current) {
+      if (isMuted) {
+        backgroundMusicRef.current.pause();
+        setIsPlaying(false);
+      } else {
+        backgroundMusicRef.current.play()
+          .then(() => setIsPlaying(true))
+          .catch(err => {
+            console.log("Audio play failed:", err);
+          });
+      }
+    }
+  }, [isMuted]);
+
+  if (game === "phishing") return <PhishingHunter onBack={() => setGame(null)} isMuted={isMuted} />;
+  if (game === "password") return <PasswordFortress onBack={() => setGame(null)} isMuted={isMuted} />;
+
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-gray-900 to-blue-900 text-white p-6 relative overflow-hidden">
+      {/* Animated background elements */}
+      <div className="absolute inset-0 z-0">
+        {[...Array(20)].map((_, i) => (
+          <div
+            key={i}
+            className="absolute rounded-full bg-cyan-500/10 animate-float"
+            style={{
+              width: Math.random() * 50 + 10 + 'px',
+              height: Math.random() * 50 + 10 + 'px',
+              top: Math.random() * 100 + '%',
+              left: Math.random() * 100 + '%',
+              animationDelay: Math.random() * 5 + 's',
+              animationDuration: Math.random() * 10 + 10 + 's'
+            }}
+          />
+        ))}
+      </div>
+      
+      {/* Mute Button */}
+      <button 
+        onClick={() => setIsMuted(!isMuted)}
+        className="absolute top-4 right-4 p-3 bg-slate-700/70 hover:bg-slate-600 rounded-full transition-colors z-10"
+        aria-label={isMuted ? "Unmute" : "Mute"}
+      >
+        {isMuted ? "🔇" : "🔊"}
+      </button>
+      
+      <div className="text-center max-w-2xl z-10">
+        <motion.h1 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="text-5xl font-extrabold mb-6 bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent"
+        >
+          🛡️ Cyber Security Dojo
+        </motion.h1>
+        
+        <motion.p 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.2, duration: 0.5 }}
+          className="text-xl text-slate-300 mb-10 max-w-md mx-auto"
+        >
+          Level up your cybersecurity skills through interactive games
+        </motion.p>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
+          <motion.div 
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.4, duration: 0.5 }}
+            className="bg-slate-800/60 p-6 rounded-2xl border border-blue-500/30 hover:border-blue-500/60 transition-all hover:scale-105 cursor-pointer shadow-lg"
+            onClick={() => setGame("phishing")}
+          >
+            <div className="text-5xl mb-4">🐟</div>
+            <h2 className="text-2xl font-bold mb-2">Phishing Hunter</h2>
+            <p className="text-slate-400 mb-4">Identify suspicious links before they steal your data!</p>
+            <div className="mt-4 text-cyan-400 font-semibold text-sm">Learn: URL analysis • Domain recognition</div>
+          </motion.div>
+          
+          <motion.div 
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.6, duration: 0.5 }}
+            className="bg-slate-800/60 p-6 rounded-2xl border border-amber-500/30 hover:border-amber-500/60 transition-all hover:scale-105 cursor-pointer shadow-lg"
+            onClick={() => setGame("password")}
+          >
+            <div className="text-5xl mb-4">🏰</div>
+            <h2 className="text-2xl font-bold mb-2">Password Fortress</h2>
+            <p className="text-slate-400 mb-4">Defend against attacks with strong password creation!</p>
+            <div className="mt-4 text-amber-400 font-semibold text-sm">Learn: Password strength • Security principles</div>
+          </motion.div>
+        </div>
+        
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.8, duration: 0.5 }}
+          className="bg-slate-900/60 p-6 rounded-2xl border border-slate-700 max-w-2xl mx-auto backdrop-blur-sm"
+        >
+          <h3 className="text-xl font-bold mb-4">🎯 Why Cybersecurity Matters</h3>
+          <p className="text-slate-300">
+            Every 39 seconds, there's a cyber attack. These games teach practical skills to protect yourself online.
+          </p>
+        </motion.div>
+      </div>
+
+      <style jsx>{`
+        @keyframes float {
+          0% { transform: translateY(0) rotate(0deg); }
+          50% { transform: translateY(-20px) rotate(10deg); }
+          100% { transform: translateY(0) rotate(0deg); }
+        }
+        .animate-float {
+          animation: float 8s ease-in-out infinite;
+        }
+      `}</style>
+    </div>
+  );
+}
