@@ -5,7 +5,7 @@ import { generatePhishingLinks, generateEducationalContent } from "../utils/gemi
 
 const shuffle = (arr) => arr.slice().sort(() => Math.random() - 0.5);
 
-export default function PhishingHunter({ onBack, isMuted }) {
+export default function PhishingHunter({ onBack, isMuted, onGameStart }) {
   const [links, setLinks] = useState([]);
   const [allLinks, setAllLinks] = useState([]);
   const [score, setScore] = useState(0);
@@ -20,6 +20,29 @@ export default function PhishingHunter({ onBack, isMuted }) {
   const [phishingLinksFound, setPhishingLinksFound] = useState(0);
   const successRef = useRef(null);
   const failRef = useRef(null);
+  const victoryRef = useRef(null);
+  const defeatRef = useRef(null);
+
+  // Stop any playing SFX when leaving this screen
+  useEffect(() => {
+    return () => {
+      try {
+        [successRef, failRef, victoryRef, defeatRef].forEach(ref => {
+          if (ref.current) {
+            ref.current.pause();
+            ref.current.currentTime = 0;
+          }
+        });
+      } catch (e) {}
+    };
+  }, []);
+
+  // Call onGameStart when component mounts
+  useEffect(() => {
+    if (onGameStart) {
+      onGameStart();
+    }
+  }, [onGameStart]);
 
   // Initialize game
   useEffect(() => {
@@ -39,8 +62,12 @@ export default function PhishingHunter({ onBack, isMuted }) {
           if (typeof Audio !== "undefined") {
             successRef.current = new Audio("/success.mp3");
             failRef.current = new Audio("/fail.mp3");
+            victoryRef.current = new Audio("/victory.mp3");
+            defeatRef.current = new Audio("/defeat.mp3");
             successRef.current.volume = 0.7;
             failRef.current.volume = 0.7;
+            victoryRef.current.volume = 0.8;
+            defeatRef.current.volume = 0.8;
           }
         } catch (err) {
           console.warn("Audio init failed:", err);
@@ -81,11 +108,29 @@ export default function PhishingHunter({ onBack, isMuted }) {
   useEffect(() => {
     if (lives <= 0) {
       setGameOver(true);
+      // Play defeat music
+      if (!isMuted && defeatRef.current) {
+        try {
+          defeatRef.current.currentTime = 0;
+          defeatRef.current.play().catch(console.error);
+        } catch (e) {
+          console.warn("Play error (defeat):", e);
+        }
+      }
     } else if (phishingLinksFound >= totalPhishingLinks && totalPhishingLinks > 0) {
       setGameWon(true);
       setGameOver(true);
+      // Play victory music
+      if (!isMuted && victoryRef.current) {
+        try {
+          victoryRef.current.currentTime = 0;
+          victoryRef.current.play().catch(console.error);
+        } catch (e) {
+          console.warn("Play error (victory):", e);
+        }
+      }
     }
-  }, [lives, phishingLinksFound, totalPhishingLinks]);
+  }, [lives, phishingLinksFound, totalPhishingLinks, isMuted]);
 
   // Generate educational content when game ends
   useEffect(() => {

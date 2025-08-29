@@ -14,7 +14,7 @@ function getStrength(password) {
   return Math.min(score, 5);
 }
 
-export default function PasswordFortress({ onBack, isMuted }) {
+export default function PasswordFortress({ onBack, isMuted, onGameStart }) {
   const [password, setPassword] = useState("");
   const [health, setHealth] = useState(100);
   const [gameOver, setGameOver] = useState(false);
@@ -27,14 +27,42 @@ export default function PasswordFortress({ onBack, isMuted }) {
   const maxRounds = 5;
   const successRef = useRef(null);
   const failRef = useRef(null);
+  const victoryRef = useRef(null);
+  const defeatRef = useRef(null);
+  const hasEndedRef = useRef(false);
+
+  // Stop any playing SFX when leaving this screen
+  useEffect(() => {
+    return () => {
+      try {
+        [successRef, failRef, victoryRef, defeatRef].forEach(ref => {
+          if (ref.current) {
+            ref.current.pause();
+            ref.current.currentTime = 0;
+          }
+        });
+      } catch (e) {}
+    };
+  }, []);
+
+  // Call onGameStart when component mounts
+  useEffect(() => {
+    if (onGameStart) {
+      onGameStart();
+    }
+  }, [onGameStart]);
 
   useEffect(() => {
     try {
       if (typeof Audio !== "undefined") {
         successRef.current = new Audio("/success.mp3");
         failRef.current = new Audio("/fail.mp3");
+        victoryRef.current = new Audio("/victory.mp3");
+        defeatRef.current = new Audio("/defeat.mp3");
         successRef.current.volume = 0.7;
         failRef.current.volume = 0.7;
+        victoryRef.current.volume = 0.8;
+        defeatRef.current.volume = 0.8;
       }
     } catch (err) {
       console.warn("Audio init failed:", err);
@@ -46,7 +74,9 @@ export default function PasswordFortress({ onBack, isMuted }) {
     if (gameOver || gameWon) {
       const generateContent = async () => {
         const content = await generateEducationalContent("password", health, maxRounds);
-        setEducationalContent(content);
+        // Clean HTML content by removing markdown code blocks
+        const cleanContent = content.replace(/```html|```/g, '').trim();
+        setEducationalContent(cleanContent);
       };
       generateContent();
     }
@@ -94,8 +124,23 @@ export default function PasswordFortress({ onBack, isMuted }) {
     }
     
     // Check if all rounds are completed
-    if (round >= maxRounds && health > 0) {
+    if (round >= maxRounds && health > 0 && !hasEndedRef.current && !gameOver) {
+      hasEndedRef.current = true;
       setGameWon(true);
+      // Stop any other SFX and play victory
+      try {
+        [failRef, defeatRef].forEach(ref => {
+          if (ref.current) { ref.current.pause(); ref.current.currentTime = 0; }
+        });
+      } catch {}
+      if (!isMuted && victoryRef.current) {
+        try {
+          victoryRef.current.currentTime = 0;
+          victoryRef.current.play().catch(console.error);
+        } catch (e) {
+          console.warn("Play error (victory):", e);
+        }
+      }
     } else {
       setRound(r => r + 1);
     }
@@ -105,7 +150,23 @@ export default function PasswordFortress({ onBack, isMuted }) {
   };
 
   const handleGameOver = () => {
+    if (hasEndedRef.current || gameWon || gameOver) return;
+    hasEndedRef.current = true;
     setIsCollapsing(true);
+    // Play defeat music
+    try {
+      [successRef, victoryRef].forEach(ref => {
+        if (ref.current) { ref.current.pause(); ref.current.currentTime = 0; }
+      });
+    } catch {}
+    if (!isMuted && defeatRef.current) {
+      try {
+        defeatRef.current.currentTime = 0;
+        defeatRef.current.play().catch(console.error);
+      } catch (e) {
+        console.warn("Play error (defeat):", e);
+      }
+    }
     setTimeout(() => {
       setGameOver(true);
       setIsCollapsing(false);

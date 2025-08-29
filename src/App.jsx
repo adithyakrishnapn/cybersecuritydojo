@@ -9,6 +9,7 @@ export default function App() {
   const [isMuted, setIsMuted] = useState(false);
   const backgroundMusicRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [needsAudioUnlock, setNeedsAudioUnlock] = useState(true);
 
   useEffect(() => {
     // Initialize background music
@@ -58,8 +59,32 @@ export default function App() {
     }
   }, [isMuted]);
 
-  if (game === "phishing") return <PhishingHunter onBack={() => setGame(null)} isMuted={isMuted} />;
-  if (game === "password") return <PasswordFortress onBack={() => setGame(null)} isMuted={isMuted} />;
+  if (game === "phishing") return <PhishingHunter onBack={() => {
+    setGame(null);
+    if (backgroundMusicRef.current && !isMuted) {
+      backgroundMusicRef.current.play()
+        .then(() => setIsPlaying(true))
+        .catch(err => console.log("Audio play failed:", err));
+    }
+  }} isMuted={isMuted} onGameStart={() => {
+    if (backgroundMusicRef.current) {
+      backgroundMusicRef.current.pause();
+      setIsPlaying(false);
+    }
+  }} />;
+  if (game === "password") return <PasswordFortress onBack={() => {
+    setGame(null);
+    if (backgroundMusicRef.current && !isMuted) {
+      backgroundMusicRef.current.play()
+        .then(() => setIsPlaying(true))
+        .catch(err => console.log("Audio play failed:", err));
+    }
+  }} isMuted={isMuted} onGameStart={() => {
+    if (backgroundMusicRef.current) {
+      backgroundMusicRef.current.pause();
+      setIsPlaying(false);
+    }
+  }} />;
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-gray-900 to-blue-900 text-white p-6 relative overflow-hidden">
@@ -83,11 +108,27 @@ export default function App() {
       
       {/* Mute Button */}
       <button 
-        onClick={() => setIsMuted(!isMuted)}
+        onClick={() => {
+          if (isMuted) {
+            // Unmuting - try to start audio
+            setIsMuted(false);
+            if (backgroundMusicRef.current && !game) {
+              backgroundMusicRef.current.play()
+                .then(() => {
+                  setIsPlaying(true);
+                  setNeedsAudioUnlock(false);
+                })
+                .catch(err => console.log("Audio play failed:", err));
+            }
+          } else {
+            // Muting - stop audio
+            setIsMuted(true);
+          }
+        }}
         className="absolute top-4 right-4 p-3 bg-slate-700/70 hover:bg-slate-600 rounded-full transition-colors z-10"
         aria-label={isMuted ? "Unmute" : "Mute"}
       >
-        {isMuted ? "🔇" : "🔊"}
+        {isMuted ? "🔇" : needsAudioUnlock ? "🔈" : "🔊"}
       </button>
       
       <div className="text-center max-w-2xl z-10">
