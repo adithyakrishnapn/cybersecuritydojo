@@ -1,110 +1,137 @@
 // src/utils/geminiClient.js
-import { GoogleGenerativeAI } from "@google/generative-ai";
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "your-api-key-here";
-const genAI = new GoogleGenerativeAI(API_KEY);
-
-// Function to generate phishing links
 export async function generatePhishingLinks(count = 6) {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    const prompt = `Generate exactly ${count} example website links for a phishing awareness game. 
+    Return ONLY a JSON array of objects with this structure: 
+    [{text: "example.com", isPhish: boolean, explanation: "brief explanation"}] 
     
-    const prompt = `
-      Generate ${count} website links for a cybersecurity educational game. 
-      Return a JSON array where each object has:
-      - "text": the website URL (mix of legitimate and phishing examples)
-      - "isPhish": boolean (true for phishing, false for legitimate)
-      - "explanation": short explanation why it's phishing or legitimate
-      
-      Phishing examples should include techniques like:
-      - Typosquatting (amaz0n.com instead of amazon.com)
-      - Wrong TLDs (paypal.security-update.net instead of paypal.com)
-      - Subdomain tricks (google.com.login-security.xyz)
-      - HTTPS deception (secure-https-bank.com)
-      
-      Legitimate examples should be well-known reputable sites.
-      
-      Return ONLY valid JSON, no other text.
-    `;
+    Requirements:
+    - ${Math.round(count * 0.6)} should be phishing examples
+    - ${Math.round(count * 0.4)} should be legitimate examples
+    - Phishing examples should show common tactics: typosquatting, suspicious TLDs, hyphens, etc.
+    - Legitimate examples should be well-known trustworthy sites
+    - Return ONLY valid JSON, no other text`;
 
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
-    
-    // Extract JSON from the response
-    const jsonMatch = text.match(/\[[\s\S]*\]/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
+    const response = await fetch(GEMINI_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-goog-api-key': GEMINI_API_KEY
+      },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{
+            text: prompt
+          }]
+        }]
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
+
+    const data = await response.json();
+    const text = data.candidates[0].content.parts[0].text;
     
-    throw new Error("No JSON found in response");
+    // Clean the response (remove markdown code blocks if present)
+    const cleanText = text.replace(/```json|```/g, '').trim();
+    
+    try {
+      const links = JSON.parse(cleanText);
+      return links.slice(0, count);
+    } catch (parseError) {
+      console.error("JSON parse error:", parseError, "Response:", text);
+      return getDefaultLinks().slice(0, count);
+    }
   } catch (error) {
     console.error("Error generating phishing links:", error);
-    // Fallback to default links
-    return [
-      { text: "paypal-login.com", isPhish: true, explanation: "Typosquatting - mimics PayPal but wrong domain" },
-      { text: "google.com", isPhish: false, explanation: "Legitimate Google domain" },
-      { text: "amaz0n-support.net", isPhish: true, explanation: 'Uses "0" instead of "o" and wrong TLD' },
-      { text: "microsoft.com", isPhish: false, explanation: "Legitimate Microsoft domain" },
-      { text: "bank-secure-login.net", isPhish: true, explanation: "Attempts to mimic bank login with suspicious TLD" },
-      { text: "github.com", isPhish: false, explanation: "Legitimate GitHub domain" }
-    ];
+    return getDefaultLinks().slice(0, count);
   }
 }
 
-// Function to generate educational content
-export async function generateEducationalContent(gameType, score, totalQuestions) {
+export async function generateEducationalContent(topic, score, totalAttempts) {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    let prompt;
     
-    let prompt = "";
-    if (gameType === "phishing") {
-      prompt = `
-        Create educational content about phishing awareness for someone who scored ${score} out of ${totalQuestions} in a phishing detection game.
-        Provide tips to identify phishing attempts, common techniques used by attackers, and best practices for staying safe online.
-        Format the response in HTML with headings, bullet points, and key points emphasized.
-        Keep it concise (around 200 words) and engaging.
-      `;
-    } else if (gameType === "password") {
-      prompt = `
-        Create educational content about password security for someone who defended a fortress in a password strength game.
-        Provide tips for creating strong passwords, common password mistakes to avoid, and best practices for password management.
-        Format the response in HTML with headings, bullet points, and key points emphasized.
-        Keep it concise (around 200 words) and engaging.
-      `;
+    if (topic === "phishing") {
+      prompt = `Create educational content about phishing awareness for someone who scored ${score} out of ${totalAttempts} in a phishing detection game.
+      Focus on: common phishing techniques, how to spot suspicious URLs, and best practices.
+      Return HTML-formatted content with <h3>, <p>, <ul>, <li> tags. Keep it concise and engaging (about 150 words).`;
+    } else {
+      prompt = `Create educational content about password security for someone who ${score > 70 ? 'did well' : 'needs improvement'} in a password strength game.
+      Focus on: password best practices, common vulnerabilities, and creating strong passwords.
+      Return HTML-formatted content with <h3>, <p>, <ul>, <li> tags. Keep it concise and engaging (about 150 words).`;
     }
-    
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    return response.text();
+
+    const response = await fetch(GEMINI_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-goog-api-key': GEMINI_API_KEY
+      },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{
+            text: prompt
+          }]
+        }]
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.candidates[0].content.parts[0].text;
   } catch (error) {
     console.error("Error generating educational content:", error);
-    
-    // Fallback content
-    if (gameType === "phishing") {
-      return `
-        <h3>Phishing Awareness Tips</h3>
-        <p>Phishing attacks attempt to trick you into revealing sensitive information. Here's how to stay safe:</p>
-        <ul>
-          <li><strong>Check URLs carefully</strong> - Look for misspellings or wrong domains</li>
-          <li><strong>Be wary of urgent requests</strong> - Legitimate companies rarely need immediate action</li>
-          <li><strong>Don't click suspicious links</strong> - Hover to see the actual URL first</li>
-          <li><strong>Look for HTTPS</strong> - But remember, attackers can get SSL certificates too</li>
-          <li><strong>Verify unexpected messages</strong> - Contact the company through official channels</li>
-        </ul>
-      `;
-    } else {
-      return `
-        <h3>Password Security Tips</h3>
-        <p>Strong passwords are your first line of defense. Follow these best practices:</p>
-        <ul>
-          <li><strong>Use long passwords</strong> - At least 12 characters</li>
-          <li><strong>Mix character types</strong> - Upper/lowercase, numbers, symbols</li>
-          <li><strong>Avoid common words</strong> - Don't use dictionary words or personal info</li>
-          <li><strong>Use unique passwords</strong> - Different for each account</li>
-          <li><strong>Consider a password manager</strong> - For generating and storing strong passwords</li>
-        </ul>
-      `;
-    }
+    return getFallbackContent(topic);
+  }
+}
+
+// Fallback functions (same as before)
+function getDefaultLinks() {
+  return [
+    { text: "paypal-login.com", isPhish: true, explanation: "Typosquatting - mimics PayPal but wrong domain" },
+    { text: "google.com", isPhish: false, explanation: "Legitimate Google domain" },
+    { text: "amaz0n-support.net", isPhish: true, explanation: 'Uses "0" instead of "o" and wrong TLD' },
+    { text: "microsoft.com", isPhish: false, explanation: "Legitimate Microsoft domain" },
+    { text: "bank-secure-login.net", isPhish: true, explanation: "Attempts to mimic bank login with suspicious TLD" },
+    { text: "github.com", isPhish: false, explanation: "Legitimate GitHub domain" },
+    { text: "apple-verify-account.com", isPhish: true, explanation: "Uses brand name with hyphens for phishing" },
+    { text: "netflix.com", isPhish: false, explanation: "Legitimate Netflix domain" }
+  ];
+}
+
+function getFallbackContent(topic) {
+  if (topic === "phishing") {
+    return `
+      <h3>🎓 Phishing Awareness Tips</h3>
+      <p>Phishing attacks try to trick you into revealing sensitive information. Here's how to stay safe:</p>
+      <ul>
+        <li>Check URLs carefully for misspellings or wrong domains</li>
+        <li>Look for HTTPS and security indicators</li>
+        <li>Be wary of urgent or threatening language</li>
+        <li>Never enter credentials on unfamiliar sites</li>
+        <li>Use multi-factor authentication when available</li>
+      </ul>
+    `;
+  } else {
+    return `
+      <h3>🎓 Password Security Best Practices</h3>
+      <p>Strong passwords are your first line of defense:</p>
+      <ul>
+        <li>Use at least 12 characters with mixed character types</li>
+        <li>Avoid common words, patterns, or personal information</li>
+        <li>Use a unique password for each important account</li>
+        <li>Consider using a password manager</li>
+        <li>Enable two-factor authentication whenever possible</li>
+      </ul>
+    `;
   }
 }

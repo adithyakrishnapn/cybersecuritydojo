@@ -1,66 +1,114 @@
 // src/components/PhishingHunter.jsx
 import React, { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-
-const SAMPLE_LINKS = [
-  { text: "paypal-login.com", isPhish: true },
-  { text: "google.com", isPhish: false },
-  { text: "amaz0n-support.net", isPhish: true },
-  { text: "microsoft.com", isPhish: false },
-  { text: "bank-secure-login.net", isPhish: true },
-  { text: "github.com", isPhish: false },
-  { text: "netflix-premium-offer.ru", isPhish: true },
-  { text: "apple.com", isPhish: false },
-  { text: "facebook-security-alert.xyz", isPhish: true },
-  { text: "twitter.com", isPhish: false },
-];
+import { generatePhishingLinks, generateEducationalContent } from "../utils/geminiClient";
 
 const shuffle = (arr) => arr.slice().sort(() => Math.random() - 0.5);
 
 export default function PhishingHunter({ onBack, isMuted }) {
   const [links, setLinks] = useState([]);
+  const [allLinks, setAllLinks] = useState([]);
   const [score, setScore] = useState(0);
   const [lives, setLives] = useState(3);
   const [gameOver, setGameOver] = useState(false);
+  const [gameWon, setGameWon] = useState(false);
   const [combo, setCombo] = useState(0);
   const [maxCombo, setMaxCombo] = useState(0);
+  const [educationalContent, setEducationalContent] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [totalPhishingLinks, setTotalPhishingLinks] = useState(0);
+  const [phishingLinksFound, setPhishingLinksFound] = useState(0);
   const successRef = useRef(null);
   const failRef = useRef(null);
 
-  // init links + audio once
+  // Initialize game
   useEffect(() => {
-    setLinks(shuffle(SAMPLE_LINKS));
-    try {
-      if (typeof Audio !== "undefined") {
-        successRef.current = new Audio("/success.mp3");
-        failRef.current = new Audio("/fail.mp3");
-        successRef.current.volume = 0.7;
-        failRef.current.volume = 0.7;
+    const initGame = async () => {
+      setIsLoading(true);
+      try {
+        const generatedLinks = await generatePhishingLinks(12);
+        const shuffledLinks = shuffle(generatedLinks);
+        const initialLinks = shuffledLinks.slice(0, 8);
+        const phishingCount = initialLinks.filter(link => link.isPhish).length;
+        
+        setAllLinks(shuffledLinks);
+        setLinks(initialLinks);
+        setTotalPhishingLinks(phishingCount);
+        
+        try {
+          if (typeof Audio !== "undefined") {
+            successRef.current = new Audio("/success.mp3");
+            failRef.current = new Audio("/fail.mp3");
+            successRef.current.volume = 0.7;
+            failRef.current.volume = 0.7;
+          }
+        } catch (err) {
+          console.warn("Audio init failed:", err);
+        }
+      } catch (error) {
+        console.error("Error initializing game:", error);
+        // Fallback to default links
+        const fallbackLinks = [
+          { text: "paypal-login.com", isPhish: true, explanation: "Typosquatting - mimics PayPal but wrong domain" },
+          { text: "google.com", isPhish: false, explanation: "Legitimate Google domain" },
+          { text: "amaz0n-support.net", isPhish: true, explanation: 'Uses "0" instead of "o" and wrong TLD' },
+          { text: "microsoft.com", isPhish: false, explanation: "Legitimate Microsoft domain" },
+          { text: "bank-secure-login.net", isPhish: true, explanation: "Attempts to mimic bank login with suspicious TLD" },
+          { text: "github.com", isPhish: false, explanation: "Legitimate GitHub domain" },
+          { text: "apple-verify-account.com", isPhish: true, explanation: "Uses brand name with hyphens for phishing" },
+          { text: "netflix.com", isPhish: false, explanation: "Legitimate Netflix domain" },
+          { text: "facebook-secure-login.net", isPhish: true, explanation: "Fake Facebook login page" },
+          { text: "twitter.com", isPhish: false, explanation: "Legitimate Twitter domain" },
+          { text: "whatsapp-verify.com", isPhish: true, explanation: "Phishing site pretending to be WhatsApp" },
+          { text: "instagram.com", isPhish: false, explanation: "Legitimate Instagram domain" }
+        ];
+        const shuffledFallback = shuffle(fallbackLinks);
+        const initialFallback = shuffledFallback.slice(0, 8);
+        const phishingCount = initialFallback.filter(link => link.isPhish).length;
+        
+        setAllLinks(shuffledFallback);
+        setLinks(initialFallback);
+        setTotalPhishingLinks(phishingCount);
+      } finally {
+        setIsLoading(false);
       }
-    } catch (err) {
-      console.warn("Audio init failed:", err);
-    }
+    };
+
+    initGame();
   }, []);
 
   // game over conditions
   useEffect(() => {
     if (lives <= 0) {
       setGameOver(true);
-    } else if (links.length === 0 && lives > 0) {
+    } else if (phishingLinksFound >= totalPhishingLinks && totalPhishingLinks > 0) {
+      setGameWon(true);
       setGameOver(true);
     }
-  }, [lives, links]);
+  }, [lives, phishingLinksFound, totalPhishingLinks]);
+
+  // Generate educational content when game ends
+  useEffect(() => {
+    if (gameOver) {
+      const generateContent = async () => {
+        const content = await generateEducationalContent("phishing", score, links.length + (3 - lives));
+        // Clean HTML content by removing markdown code blocks
+        const cleanContent = content.replace(/```html|```/g, '').trim();
+        setEducationalContent(cleanContent);
+      };
+      generateContent();
+    }
+  }, [gameOver, score, lives]);
 
   const handleClick = (index) => {
-    // Create a copy of the current links array
     const clicked = links[index];
     console.log("Clicked:", clicked);
 
     if (!clicked) return;
 
     if (clicked.isPhish) {
-      // Correct choice - phishing link
       setScore((s) => s + 1);
+      setPhishingLinksFound((p) => p + 1);
       setCombo((c) => {
         const newCombo = c + 1;
         if (newCombo > maxCombo) setMaxCombo(newCombo);
@@ -75,9 +123,7 @@ export default function PhishingHunter({ onBack, isMuted }) {
         }
       }
     } else {
-      // Wrong choice - legitimate link
-      // FIXED: This was reducing lives by 2 instead of 1
-      setLives((l) => l - 1); // Now reduces by 1 only
+      setLives((l) => l - 1);
       setCombo(0);
       if (!isMuted) {
         try {
@@ -89,18 +135,81 @@ export default function PhishingHunter({ onBack, isMuted }) {
       }
     }
 
-    // Remove the clicked link from the list
-    setLinks(prevLinks => prevLinks.filter((_, i) => i !== index));
+    // Replace the clicked link with a new one from the pool
+    const remainingLinks = allLinks.filter(link => !links.includes(link));
+    
+    if (remainingLinks.length > 0) {
+      const newLink = remainingLinks[0];
+      const newLinks = [...links];
+      newLinks[index] = newLink;
+      setLinks(newLinks);
+      
+      // Remove the used link from the pool
+      setAllLinks(prev => prev.filter(link => link !== newLink));
+    } else {
+      // If no more links, just remove the clicked one
+      setLinks(prev => prev.filter((_, i) => i !== index));
+    }
   };
 
-  const reset = () => {
-    setLinks(shuffle(SAMPLE_LINKS));
-    setScore(0);
-    setLives(3);
-    setGameOver(false);
-    setCombo(0);
-    setMaxCombo(0);
+  const reset = async () => {
+    setIsLoading(true);
+    try {
+      const generatedLinks = await generatePhishingLinks(12);
+      const shuffledLinks = shuffle(generatedLinks);
+      const initialLinks = shuffledLinks.slice(0, 8);
+      const phishingCount = initialLinks.filter(link => link.isPhish).length;
+      
+      setAllLinks(shuffledLinks);
+      setLinks(initialLinks);
+      setTotalPhishingLinks(phishingCount);
+    } catch (error) {
+      console.error("Error resetting game:", error);
+      // Fallback to default links
+      const fallbackLinks = [
+        { text: "paypal-login.com", isPhish: true, explanation: "Typosquatting - mimics PayPal but wrong domain" },
+        { text: "google.com", isPhish: false, explanation: "Legitimate Google domain" },
+        { text: "amaz0n-support.net", isPhish: true, explanation: 'Uses "0" instead of "o" and wrong TLD' },
+        { text: "microsoft.com", isPhish: false, explanation: "Legitimate Microsoft domain" },
+        { text: "bank-secure-login.net", isPhish: true, explanation: "Attempts to mimic bank login with suspicious TLD" },
+        { text: "github.com", isPhish: false, explanation: "Legitimate GitHub domain" },
+        { text: "apple-verify-account.com", isPhish: true, explanation: "Uses brand name with hyphens for phishing" },
+        { text: "netflix.com", isPhish: false, explanation: "Legitimate Netflix domain" },
+        { text: "facebook-secure-login.net", isPhish: true, explanation: "Fake Facebook login page" },
+        { text: "twitter.com", isPhish: false, explanation: "Legitimate Twitter domain" },
+        { text: "whatsapp-verify.com", isPhish: true, explanation: "Phishing site pretending to be WhatsApp" },
+        { text: "instagram.com", isPhish: false, explanation: "Legitimate Instagram domain" }
+      ];
+      const shuffledFallback = shuffle(fallbackLinks);
+      const initialFallback = shuffledFallback.slice(0, 8);
+      const phishingCount = initialFallback.filter(link => link.isPhish).length;
+      
+      setAllLinks(shuffledFallback);
+      setLinks(initialFallback);
+      setTotalPhishingLinks(phishingCount);
+    } finally {
+      setScore(0);
+      setLives(3);
+      setGameOver(false);
+      setGameWon(false);
+      setCombo(0);
+      setMaxCombo(0);
+      setPhishingLinksFound(0);
+      setEducationalContent("");
+      setIsLoading(false);
+    }
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-gray-900 to-blue-900 text-white">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <p>Generating phishing challenges...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-gray-900 to-blue-900 text-white p-6 relative overflow-hidden">
@@ -133,6 +242,9 @@ export default function PhishingHunter({ onBack, isMuted }) {
         <header className="text-center mb-6">
           <h1 className="text-4xl font-extrabold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">🐟 Phishing Hunter</h1>
           <p className="text-slate-300 mt-2">Click only suspicious links — you have {lives} lives!</p>
+          <p className="text-slate-400 text-sm mt-1">
+            Found {phishingLinksFound} of {totalPhishingLinks} phishing links
+          </p>
         </header>
 
         <div className="bg-slate-800/80 p-6 rounded-2xl border border-blue-500/30 shadow-lg backdrop-blur-sm">
@@ -142,9 +254,35 @@ export default function PhishingHunter({ onBack, isMuted }) {
               animate={{ opacity: 1, scale: 1 }}
               className="text-center space-y-4"
             >
-              <div className="text-3xl font-bold">{lives > 0 ? "🎉 You Win!" : "💀 Game Over!"}</div>
-              <div className="text-slate-200 text-lg">Final Score: <span className="font-semibold text-cyan-400">{score}</span></div>
-              <div className="text-slate-200">Max Combo: <span className="font-semibold text-yellow-400">{maxCombo}</span></div>
+              <div className="text-3xl font-bold">
+                {gameWon ? "🎉 You Win!" : "💀 Game Over!"}
+              </div>
+              <div className="text-slate-200 text-lg">
+                Final Score: <span className="font-semibold text-cyan-400">{score}</span>
+              </div>
+              <div className="text-slate-200">
+                Phishing Links Found: <span className="font-semibold text-green-400">{phishingLinksFound}/{totalPhishingLinks}</span>
+              </div>
+              <div className="text-slate-200">
+                Max Combo: <span className="font-semibold text-yellow-400">{maxCombo}</span>
+              </div>
+              
+              {/* Educational Content Box */}
+              {educationalContent && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.5 }}
+                  className="mt-6 p-6 bg-slate-800/80 rounded-2xl border border-cyan-500/30 text-left"
+                >
+                  <h3 className="text-xl font-bold text-cyan-400 mb-4">🎓 Cybersecurity Knowledge</h3>
+                  <div 
+                    className="text-slate-300 prose prose-invert prose-sm"
+                    dangerouslySetInnerHTML={{ __html: educationalContent }}
+                  />
+                </motion.div>
+              )}
+              
               <div className="flex justify-center gap-4 mt-6">
                 <button onClick={reset} className="px-6 py-3 rounded-xl bg-cyan-500 hover:bg-cyan-600 text-slate-900 font-bold transition-colors">
                   Play Again
@@ -174,7 +312,7 @@ export default function PhishingHunter({ onBack, isMuted }) {
                 )}
               </div>
 
-              <div className="space-y-4 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                 <AnimatePresence>
                   {links.map((link, idx) => (
                     <motion.button
@@ -185,11 +323,11 @@ export default function PhishingHunter({ onBack, isMuted }) {
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, x: -20 }}
-                      className="w-full text-left px-5 py-4 rounded-xl border border-slate-700 bg-gradient-to-r from-slate-800 to-slate-900 hover:from-slate-700 hover:to-slate-800 shadow-md transition-all"
+                      className="text-left p-4 rounded-xl border border-slate-700 bg-gradient-to-r from-slate-800 to-slate-900 hover:from-slate-700 hover:to-slate-800 shadow-md transition-all"
                     >
                       <div className="flex justify-between items-center">
-                        <div className="font-medium text-lg">{link.text}</div>
-                        <div className="text-xs text-slate-400 bg-slate-700/50 px-2 py-1 rounded">click to inspect</div>
+                        <div className="font-medium text-sm md:text-base break-all">{link.text}</div>
+                        <div className="text-xs text-slate-400 bg-slate-700/50 px-2 py-1 rounded ml-2 flex-shrink-0">click</div>
                       </div>
                     </motion.button>
                   ))}

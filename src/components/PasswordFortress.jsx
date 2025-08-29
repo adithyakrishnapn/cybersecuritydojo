@@ -1,6 +1,7 @@
 // src/components/PasswordFortress.jsx
 import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { generateEducationalContent } from "../utils/geminiClient";
 
 function getStrength(password) {
   let score = 0;
@@ -22,6 +23,7 @@ export default function PasswordFortress({ onBack, isMuted }) {
   const [isCollapsing, setIsCollapsing] = useState(false);
   const [isProtected, setIsProtected] = useState(false);
   const [round, setRound] = useState(1);
+  const [educationalContent, setEducationalContent] = useState("");
   const maxRounds = 5;
   const successRef = useRef(null);
   const failRef = useRef(null);
@@ -38,6 +40,17 @@ export default function PasswordFortress({ onBack, isMuted }) {
       console.warn("Audio init failed:", err);
     }
   }, []);
+
+  // Generate educational content when game ends
+  useEffect(() => {
+    if (gameOver || gameWon) {
+      const generateContent = async () => {
+        const content = await generateEducationalContent("password", health, maxRounds);
+        setEducationalContent(content);
+      };
+      generateContent();
+    }
+  }, [gameOver, gameWon, health]);
 
   const checkPassword = () => {
     const strength = getStrength(password);
@@ -106,6 +119,7 @@ export default function PasswordFortress({ onBack, isMuted }) {
     setGameWon(false);
     setAttackLog([]);
     setRound(1);
+    setEducationalContent("");
   };
 
   return (
@@ -147,7 +161,24 @@ export default function PasswordFortress({ onBack, isMuted }) {
         >
           <p className="text-3xl font-bold mb-4 text-red-400">💀 Fortress Breached!</p>
           <p className="mb-6 text-slate-300">Your password wasn't strong enough to withstand the attack.</p>
-          <div className="flex justify-center gap-4">
+          
+          {/* Educational Content Box */}
+          {educationalContent && (
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className="mt-6 p-6 bg-slate-800/80 rounded-2xl border border-amber-500/30 text-left"
+            >
+              <h3 className="text-xl font-bold text-amber-400 mb-4">🎓 Password Security Knowledge</h3>
+              <div 
+                className="text-slate-300 prose prose-invert"
+                dangerouslySetInnerHTML={{ __html: educationalContent }}
+              />
+            </motion.div>
+          )}
+          
+          <div className="flex justify-center gap-4 mt-6">
             <button
               onClick={reset}
               className="px-6 py-3 bg-amber-500 hover:bg-amber-600 rounded-xl font-bold transition-colors"
@@ -170,7 +201,24 @@ export default function PasswordFortress({ onBack, isMuted }) {
         >
           <p className="text-3xl font-bold mb-4 text-green-400">🏆 Victory!</p>
           <p className="mb-6 text-slate-300">You successfully defended your fortress with strong passwords!</p>
-          <div className="flex justify-center gap-4">
+          
+          {/* Educational Content Box */}
+          {educationalContent && (
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className="mt-6 p-6 bg-slate-800/80 rounded-2xl border border-amber-500/30 text-left"
+            >
+              <h3 className="text-xl font-bold text-amber-400 mb-4">🎓 Password Security Knowledge</h3>
+              <div 
+                className="text-slate-300 prose prose-invert"
+                dangerouslySetInnerHTML={{ __html: educationalContent }}
+              />
+            </motion.div>
+          )}
+          
+          <div className="flex justify-center gap-4 mt-6">
             <button
               onClick={reset}
               className="px-6 py-3 bg-amber-500 hover:bg-amber-600 rounded-xl font-bold transition-colors"
