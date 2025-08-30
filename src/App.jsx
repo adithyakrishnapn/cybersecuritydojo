@@ -34,14 +34,10 @@ export default function App() {
               console.log("Audio play failed:", err);
             });
         }
-        // Also start preloader music if booting
-        if (!isMuted && isBooting && preloaderMusicRef.current) {
-          preloaderMusicRef.current.play().catch(err => console.log("Preloader audio play failed:", err));
-        }
+        // Don't auto-play preloader music during boot - wait for explicit user interaction
       };
       
-      // Try to play on initial load
-      tryPlayMusic();
+      // Don't auto-play audio on initial load - wait for user interaction
       
       // Add event listener for user interaction
       document.addEventListener('click', tryPlayMusic, { once: true });
@@ -74,9 +70,8 @@ export default function App() {
     if (preloaderMusicRef.current) {
       if (isMuted) {
         preloaderMusicRef.current.pause();
-      } else if (isBooting) {
-        preloaderMusicRef.current.play().catch(err => console.log("Preloader play failed:", err));
       }
+      // Remove auto-play of preloader music - only play on user click
     }
   }, [isMuted]);
 
