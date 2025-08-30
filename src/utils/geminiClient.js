@@ -61,6 +61,13 @@ export async function generateEducationalContent(topic, score, totalAttempts) {
       prompt = `Create educational content about phishing awareness for someone who scored ${score} out of ${totalAttempts} in a phishing detection game.
       Focus on: common phishing techniques, how to spot suspicious URLs, and best practices.
       Return HTML-formatted content with <h3>, <p>, <ul>, <li> tags. Keep it concise and engaging (about 150 words).`;
+    } else if (topic === "cyberrunner") {
+      prompt = `Create educational content for a cybersecurity runner game where the player passes through threat keywords and jumps over security (protection) keywords.
+      The player scored ${score}. Provide guidance on:
+      - Recognizing common cyber threats (malware, phishing, ransomware, etc.)
+      - Understanding protection measures (firewalls, 2FA, encryption, VPNs, patches)
+      - Why threats are dangerous and protections matter in real life
+      Return HTML-formatted content with <h3>, <p>, <ul>, <li> tags. Keep it concise (~150 words) and actionable.`;
     } else {
       prompt = `Create educational content about password security for someone who ${score > 70 ? 'did well' : 'needs improvement'} in a password strength game.
       Focus on: password best practices, common vulnerabilities, and creating strong passwords.
@@ -134,4 +141,76 @@ function getFallbackContent(topic) {
       </ul>
     `;
   }
+}
+
+export async function generateCyberObjects(count = 15) {
+  try {
+    const prompt = `Generate exactly ${count} cybersecurity-related objects for a platformer game.
+    Return ONLY a JSON array of objects with this structure: 
+    [{type: "threat"|"security", name: "Object Name", description: "Brief explanation of what this is"}]
+    
+    Requirements:
+    - ${Math.round(count * 0.6)} should be threats (malware, viruses, attacks, etc.)
+    - ${Math.round(count * 0.4)} should be security items (tools, practices, protections)
+    - Threats should represent common cybersecurity dangers
+    - Security items should represent protective measures
+    - Return ONLY valid JSON, no other text`;
+
+    const response = await fetch(GEMINI_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-goog-api-key': GEMINI_API_KEY
+      },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{
+            text: prompt
+          }]
+        }]
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const text = data.candidates[0].content.parts[0].text;
+    
+    // Clean the response (remove markdown code blocks if present)
+    const cleanText = text.replace(/```json|```/g, '').trim();
+    
+    try {
+      const objects = JSON.parse(cleanText);
+      return objects.slice(0, count);
+    } catch (parseError) {
+      console.error("JSON parse error:", parseError, "Response:", text);
+      return getDefaultCyberObjects().slice(0, count);
+    }
+  } catch (error) {
+    console.error("Error generating cyber objects:", error);
+    return getDefaultCyberObjects().slice(0, count);
+  }
+}
+
+// Add fallback function
+function getDefaultCyberObjects() {
+  return [
+    { type: "threat", name: "Virus", description: "Malicious software that replicates itself" },
+    { type: "security", name: "Firewall", description: "Network security system that monitors traffic" },
+    { type: "threat", name: "Phishing", description: "Fraudulent attempt to obtain sensitive information" },
+    { type: "security", name: "VPN", description: "Virtual Private Network encrypts your connection" },
+    { type: "threat", name: "Ransomware", description: "Malware that encrypts files and demands payment" },
+    { type: "security", name: "2FA", description: "Two-Factor Authentication adds extra security" },
+    { type: "threat", name: "Trojan", description: "Malware disguised as legitimate software" },
+    { type: "security", name: "Antivirus", description: "Software designed to detect and destroy viruses" },
+    { type: "threat", name: "Keylogger", description: "Malware that records keystrokes" },
+    { type: "security", name: "Encryption", description: "Process of encoding information to protect it" },
+    { type: "threat", name: "DDoS", description: "Distributed Denial of Service attack overwhelms systems" },
+    { type: "security", name: "Password Manager", description: "Tool that securely stores and manages passwords" },
+    { type: "threat", name: "Spyware", description: "Software that secretly monitors user activity" },
+    { type: "security", name: "Patch", description: "Software update that fixes vulnerabilities" },
+    { type: "threat", name: "Social Engineering", description: "Psychological manipulation to gain access" },
+  ];
 }
